@@ -140,15 +140,6 @@ header{background:var(--ink);color:var(--paper);padding:1.1rem 2rem;display:flex
           <option value="6:00-9:00pm">6:00 - 9:00 pm</option>
         </select>
       </div>
-      <div class="field">
-        <label>Cuatrimestre</label>
-        <select id="inp-cuatrimestre">
-          <option value="">— Selecciona —</option>
-          <option value="I Cuatrimestre">I Cuatrimestre</option>
-          <option value="II Cuatrimestre">II Cuatrimestre</option>
-          <option value="III Cuatrimestre">III Cuatrimestre</option>
-        </select>
-      </div>
       <p class="err-msg" id="reg-err">⚠ Por favor completa todos los campos.</p>
       <button class="btn" type="button" id="btn-start">▶ Comenzar Actividad</button>
     </div>
@@ -160,8 +151,8 @@ header{background:var(--ink);color:var(--paper);padding:1.1rem 2rem;display:flex
     <div class="info-item"><span>Estudiante</span><strong id="disp-nombre">—</strong></div>
     <div class="info-item"><span>Día</span><strong id="disp-dia">—</strong></div>
     <div class="info-item"><span>Horario</span><strong id="disp-horario">—</strong></div>
-    <div class="info-item"><span>Cuatrimestre</span><strong id="disp-cuatrimestre">—</strong></div>
     <div class="info-item"><span>Curso</span><strong>Cálculo 3</strong></div>
+    <div class="info-item"><span>Sesión</span><strong id="disp-sesion">1</strong></div>
   </div>
   <div id="score-box">
     <div class="score-num" id="final-score">0</div>
@@ -195,7 +186,7 @@ header{background:var(--ink);color:var(--paper);padding:1.1rem 2rem;display:flex
 <script>
 const CLUES=[{"id":1,"word":"REGLADELACADENA","clue":"Nombre de la regla que permite derivar una función compuesta multivariada con respecto a una variable intermedia."},{"id":2,"word":"DOMINIOMAXIMO","clue":"Cantidad de pares ordenados que tiene una función sin indefinirse."},{"id":3,"word":"PARCIAL","clue":"El símbolo ∂f/∂x representa una derivada."},{"id":4,"word":"FUBINI","clue":"El teorema de integración doble iterada se le atribuye al matemático italiano de apellido."},{"id":5,"word":"CONSTANTES","clue":"En ∂f/∂y las variables x, z se toman como."},{"id":6,"word":"ORDENSUPERIOR","clue":"La derivada ∂²f/∂x² se denomina."},{"id":7,"word":"GRADIENTE","clue":"La fórmula ∇f = (fx, fy, fz) se denomina."},{"id":8,"word":"DERIVADADIRECCIONAL","clue":"La operación matemática ∇f · u se denomina."},{"id":9,"word":"IMPLICITA","clue":"Para resolver la derivada de la función multivariada 3xy + 9xy³ + 2y² = 7 se necesita la derivada."},{"id":10,"word":"CAMPOVECTORIAL","clue":"Función vectorial cuyos componentes son funciones de varias variables."},{"id":11,"word":"DIVERGENCIA","clue":"Suma de las derivadas parciales de cada componente de un campo vectorial respecto a su variable correspondiente."},{"id":12,"word":"CAMPOCONSERVATIVO","clue":"Tipo de campo vectorial cuyo rotacional es igual al vector cero."},{"id":13,"word":"PARAMETRIZACION","clue":"Representación de una curva mediante una función vectorial que depende de un parámetro independiente."},{"id":14,"word":"VOLUMEN","clue":"Interpretación geométrica de una integral triple sobre una región del espacio."},{"id":15,"word":"GAUSS","clue":"Nombre del matemático al que se le atribuye el teorema que relaciona la integral doble de un campo vectorial con la integral triple de su divergencia."},{"id":16,"word":"INTEGRALDEFLUJO","clue":"Integral definida como el producto punto de un campo vectorial con el vector normal a una superficie."}];
 const PTS=10;
-const SCRIPT_URL="https://script.google.com/macros/s/AKfycbx6oXyZnJY61bupiT_qp5jyS9bCN5-_VT2zeJ3H7-T1yaeG8NZEn4puklGsDQiIvrX7kQ/exec";
+const SCRIPT_URL="https://script.google.com/macros/s/AKfycbwWGtyak4RohIPwrNPGS4KiOyF7Sc_J9bfssifmflZO_W8d_-7RVtdDA9UgU08ZqwD7/exec";
 const CURSO="Cálculo 3";
 const CURSO_CORTO = {
   'Introducción al Cálculo': 'Intro',
@@ -204,6 +195,8 @@ const CURSO_CORTO = {
   'Cálculo 3':               'Calc3',
   'Álgebra Lineal':          'Algebra',
   'Matemática Discreta':     'Discreta',
+  'Métodos Numéricos':       'Numericos',
+  'Matemática 2':            'Mate2',
 }[CURSO] || CURSO;
 const TIME_LIMIT = 60 * 60;
 
@@ -211,16 +204,15 @@ let timerInterval = null;
 let secondsLeft = TIME_LIMIT;
 
 function startTimer(){
-  secondsLeft = TIME_LIMIT;
   document.getElementById('timer-box').style.display = 'flex';
   updateTimerDisplay();
   timerInterval = setInterval(()=>{
     secondsLeft--;
     updateTimerDisplay();
+    if(secondsLeft % 10 === 0) saveState();
     if(secondsLeft <= 0){
       clearInterval(timerInterval);
       timerInterval = null;
-      // Auto-submit when time runs out
       submitActivity(true);
     }
   }, 1000);
@@ -247,6 +239,36 @@ const DIRS=[[0,1],[1,0]];
 const ALPHA='ABCDEFGHIJKLMNOPRSTUVWXYZ';
 const GSIZE=20;
 let grid=[],placedWords=[];
+
+function buildGridFromWords(words, rng){
+  const g=Array.from({length:GSIZE},()=>Array(GSIZE).fill(''));
+  const placed=[];
+  const sorted=[...new Set(words)].sort((a,b)=>b.length-a.length);
+  for(const word of sorted){
+    let ok=false;
+    for(let t=0;t<600&&!ok;t++){
+      const[dr,dc]=DIRS[Math.floor(rng()*DIRS.length)];
+      const r=Math.floor(rng()*GSIZE),c=Math.floor(rng()*GSIZE);
+      const len=word.length;
+      const er=r+dr*(len-1),ec=c+dc*(len-1);
+      if(er<0||er>=GSIZE||ec<0||ec>=GSIZE)continue;
+      let can=true;
+      for(let i=0;i<len;i++){const nr=r+dr*i,nc=c+dc*i;if(g[nr][nc]!==''&&g[nr][nc]!==word[i]){can=false;break}}
+      if(!can)continue;
+      const br=r-dr,bc=c-dc;
+      if(br>=0&&br<GSIZE&&bc>=0&&bc<GSIZE&&g[br][bc]!==''){can=false;}
+      if(!can)continue;
+      const ar=er+dr,ac=ec+dc;
+      if(ar>=0&&ar<GSIZE&&ac>=0&&ac<GSIZE&&g[ar][ac]!==''){can=false;}
+      if(!can)continue;
+      const cells=[];
+      for(let i=0;i<len;i++){const nr=r+dr*i,nc=c+dc*i;g[nr][nc]=word[i];cells.push([nr,nc])}
+      placed.push({word,cells});ok=true;
+    }
+  }
+  for(let r=0;r<GSIZE;r++)for(let c=0;c<GSIZE;c++)if(g[r][c]==='')g[r][c]=ALPHA[Math.floor(rng()*ALPHA.length)];
+  return{g,placed};
+}
 
 function buildGrid(rng){
   const g=Array.from({length:GSIZE},()=>Array(GSIZE).fill(''));
@@ -322,8 +344,11 @@ function goHome(){show('screen-register')}
 
 function saveState(){
   if(!studentData.nombre) return;
-  const state={studentData, activeClues, answers, submitted, secondsLeft};
-  try{ localStorage.setItem('gamif_'+CURSO+'_'+studentData.nombre, JSON.stringify(state)); }catch(e){}
+  const key = 'gamif_'+CURSO+'_'+studentData.nombre;
+  try{
+    localStorage.setItem(key, JSON.stringify({studentData, activeClues, answers, submitted}));
+    console.log('Saved state, sessionCount=', studentData.sessionCount, 'key=', key);
+  }catch(e){ console.error('saveState error:', e); }
 }
 
 function clearState(){
@@ -336,64 +361,107 @@ function startActivity(){
   const nombre=document.getElementById('inp-nombre').value.trim();
   const dia=document.getElementById('inp-dia').value;
   const horario=document.getElementById('inp-horario').value;
-  const cuatrimestre=document.getElementById('inp-cuatrimestre').value;
-  if(!apellidos||!nombre||!dia||!horario||!cuatrimestre){
+  if(!apellidos||!nombre||!dia||!horario){
     document.getElementById('reg-err').style.display='block';
     document.getElementById('reg-err').textContent='⚠ Por favor completa todos los campos.';return;}
   document.getElementById('reg-err').style.display='none';
+
   const nombreCompleto = apellidos + ', ' + nombre;
 
-  // Check for saved state
-  let saved = null;
-  try{ const s = localStorage.getItem('gamif_'+CURSO+'_'+nombreCompleto); if(s) saved = JSON.parse(s); }catch(e){}
+  const seed = hashStr(nombreCompleto+dia+horario+CURSO);
+  studentData = {
+    nombre: nombreCompleto, dia, horario, curso: CURSO,
+    startedAt: Date.now(), sessionCount: 1, seed
+  };
+  answers={};submitted=false;
+  secondsLeft = TIME_LIMIT;
 
-  if(saved && !saved.submitted){
-    studentData = saved.studentData;
-    activeClues = saved.activeClues;
-    answers     = saved.answers;
-    submitted   = saved.submitted;
-    secondsLeft = saved.secondsLeft;
-  } else {
-    studentData={nombre:nombreCompleto, dia, horario, cuatrimestre, curso:CURSO};
-    answers={};submitted=false;
-    secondsLeft = TIME_LIMIT;
+  const rng=makeRng(seed);
+  const shuffledAll = seededShuffle([...CLUES], rng);
+  const seenWords = new Set();
+  const pickedClues = [];
+  for(const c of shuffledAll){
+    if(seenWords.has(c.word)) continue;
+    seenWords.add(c.word);
+    pickedClues.push(c);
+    if(pickedClues.length >= WORDS_PER_STUDENT) break;
+  }
+  activeClues = seededShuffle(pickedClues, rng).map((c,i)=>({...c, displayId:i+1}));
+  activeClues.forEach(c=>{answers[c.displayId]={attempts:[],correct:false,attemptsUsed:0,word:c.word,nearlyCorrect:false};});
+  const{g,placed}=buildGrid(rng);
+  grid=g;placedWords=placed;
 
-    const seed=hashStr(nombre.toLowerCase()+dia+horario+String(Math.floor(Date.now()/60000)));
-    const rng=makeRng(seed);
-    const shuffledAll = seededShuffle([...CLUES], rng);
-    const seenWords = new Set();
-    const pickedClues = [];
-    for(const c of shuffledAll){
-      if(seenWords.has(c.word)) continue;
-      seenWords.add(c.word);
-      pickedClues.push(c);
-      if(pickedClues.length >= WORDS_PER_STUDENT) break;
+  const btn = document.getElementById('btn-start');
+  btn.disabled=true;
+  btn.textContent='Cargando…';
+
+  const restoreAndLaunch = (answered) => {
+    if(answered && Object.keys(answered).length > 0){
+      activeClues.forEach((item, idx) => {
+        const key = 'P'+(idx+1);
+        const cell = answered[key];
+        if(!cell || cell==='—') return;
+        const state = answers[item.displayId];
+        if(cell.includes('✓')){
+          const attempt = cell.replace(' ✓','').split(' → ').pop().trim();
+          state.correct=true;
+          state.attemptsUsed=1;
+          state.attempts=[attempt];
+        } else if(cell.includes('✗')){
+          state.attemptsUsed=2;
+          const intentsPart = cell.split(' ✗')[0];
+          state.attempts = intentsPart.split(' → ').map(s=>s.trim());
+        } else {
+          state.attemptsUsed=1;
+          state.attempts = cell.split(' → ').map(s=>s.trim());
+        }
+      });
+      studentData.sessionCount = 2;
     }
-    activeClues = seededShuffle(pickedClues, rng).map((c,i)=>({...c, displayId:i+1}));
-    activeClues.forEach(c=>{answers[c.displayId]={attempts:[],correct:false,attemptsUsed:0,word:c.word,nearlyCorrect:false};});
 
-    const{g,placed}=buildGrid(rng);
-    grid=g;placedWords=placed;
+    btn.disabled=false;
+    btn.textContent='▶ Comenzar Actividad';
+
+    document.getElementById('disp-nombre').textContent=studentData.nombre;
+    document.getElementById('disp-dia').textContent=studentData.dia;
+    document.getElementById('disp-horario').textContent=studentData.horario;
+    document.getElementById('disp-sesion').textContent=studentData.sessionCount;
+    document.getElementById('score-box').style.display='none';
+    document.getElementById('submit-btn').disabled=false;
+    document.getElementById('submit-btn').textContent='✔ Entregar Actividad';
+
+    renderGrid();renderClues();updateProgress();
+    startTimer();
+    show('screen-puzzle');
+    setTimeout(()=>syncProgress('progreso'), 1500);
+  };
+
+  if(SCRIPT_URL){
+    const url = SCRIPT_URL.replace('/exec','') + '/exec?nombre='+encodeURIComponent(nombreCompleto)
+      +'&dia='+encodeURIComponent(dia)
+      +'&horario='+encodeURIComponent(horario)
+      +'&cursoCorto='+encodeURIComponent(CURSO_CORTO);
+    document.getElementById('reg-err').style.display='block';
+    document.getElementById('reg-err').style.color='#5b2d8e';
+    document.getElementById('reg-err').textContent='Verificando progreso anterior…';
+    fetch(url)
+      .then(r=>r.json())
+      .then(data=>{
+        document.getElementById('reg-err').style.display='none';
+        restoreAndLaunch(data.found ? data.answered : null);
+      })
+      .catch(err=>{
+        document.getElementById('reg-err').style.display='block';
+        document.getElementById('reg-err').style.color='#c0392b';
+        document.getElementById('reg-err').textContent='No se pudo verificar progreso: '+err.message+'. Iniciando desde cero.';
+        setTimeout(()=>{
+          document.getElementById('reg-err').style.display='none';
+          restoreAndLaunch(null);
+        }, 2000);
+      });
+  } else {
+    restoreAndLaunch(null);
   }
-
-  document.getElementById('disp-nombre').textContent=studentData.nombre;
-  document.getElementById('disp-dia').textContent=studentData.dia;
-  document.getElementById('disp-horario').textContent=studentData.horario;
-  document.getElementById('disp-cuatrimestre').textContent=studentData.cuatrimestre;
-  document.getElementById('score-box').style.display='none';
-  document.getElementById('submit-btn').disabled=false;
-  document.getElementById('submit-btn').textContent='✔ Entregar Actividad';
-
-  if(!grid.length){
-    const seed=hashStr(studentData.nombre.toLowerCase()+String(Math.floor(Date.now()/60000)));
-    const rng=makeRng(seed);
-    const{g,placed}=buildGrid(rng);
-    grid=g;placedWords=placed;
-  }
-
-  renderGrid();renderClues();updateProgress();
-  startTimer();
-  show('screen-puzzle');
 }
 
 function renderClues(){
@@ -401,6 +469,7 @@ function renderClues(){
   container.innerHTML='';
   activeClues.forEach(item=>{
     const id=item.displayId;
+    const state=answers[id];
     const div=document.createElement('div');
     div.className='clue-row';div.id=`row-${id}`;
     div.innerHTML=`
@@ -421,12 +490,45 @@ function renderClues(){
       <div style="min-width:55px;text-align:right"><span class="clue-answer" id="ans-${id}"></span></div>`;
     container.appendChild(div);
 
-    // Wire input and button via addEventListener (mobile-safe)
     const inp = div.querySelector(`#inp-${id}`);
     const btn = div.querySelector(`#btn-${id}`);
     inp.addEventListener('input', ()=>{ inp.value = inp.value.toUpperCase(); });
     inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); submitAnswer(id); }});
     btn.addEventListener('click', ()=> submitAnswer(id));
+
+    if(state){
+      const fbEl=div.querySelector(`#fb-${id}`);
+      const ansEl=div.querySelector(`#ans-${id}`);
+      const dot1=div.querySelector(`#dot-${id}-1`);
+      const dot2=div.querySelector(`#dot-${id}-2`);
+
+      if(state.correct){
+        inp.value=state.word;
+        inp.disabled=true;btn.disabled=true;
+        div.className='clue-row correct';
+        fbEl.textContent='✓ ¡Correcto!';fbEl.className='feedback ok';
+        ansEl.textContent=state.word;ansEl.className='clue-answer';
+        if(dot1) dot1.className='attempt-dot correct';
+        highlightWord(item.word);
+      } else if(state.attemptsUsed>=2){
+        inp.disabled=true;btn.disabled=true;
+        div.className='clue-row exhausted';
+        fbEl.textContent='✗ Agotaste los intentos';fbEl.className='feedback bad';
+        if(dot1) dot1.className='attempt-dot wrong';
+        if(dot2) dot2.className='attempt-dot wrong';
+        if(state.attempts.length>0) inp.value=state.attempts[state.attempts.length-1];
+      } else if(state.attemptsUsed===1){
+        div.className='clue-row wrong';
+        fbEl.textContent='✗ Incorrecto, intenta de nuevo';fbEl.className='feedback bad';
+        if(dot1) dot1.className='attempt-dot wrong';
+        if(state.attempts.length>0) inp.value=state.attempts[0];
+      } else if(state.nearlyCorrect){
+        div.className='clue-row nearly';
+        fbEl.textContent='⚠ Casi correcto, revisá la palabra en la sopa de letras';fbEl.className='feedback warn';
+        inp.style.background='#fff9c4';
+        if(state.attempts.length>0) inp.value=state.attempts[state.attempts.length-1];
+      }
+    }
   });
 }
 
@@ -519,7 +621,7 @@ function calcScore(){
 // Builds the progress payload and sends it to Sheets (fire-and-forget)
 function syncProgress(tipo='progreso', score=null){
   if(!SCRIPT_URL) return;
-  const segundosUsados = TIME_LIMIT - secondsLeft;
+  const segundosUsados = Math.min(TIME_LIMIT - secondsLeft, TIME_LIMIT);
   const mm = Math.floor(segundosUsados/60);
   const ss2 = segundosUsados%60;
   const tiempoUsado = String(mm).padStart(2,'0')+':'+String(ss2).padStart(2,'0');
@@ -539,9 +641,9 @@ function syncProgress(tipo='progreso', score=null){
   const record={
     tipo,
     nombre:       studentData.nombre,
+    sesion:       studentData.sessionCount || 1,
     dia:          studentData.dia,
     horario:      studentData.horario,
-    cuatrimestre: studentData.cuatrimestre,
     curso:        CURSO,
     cursoCorto:   CURSO_CORTO,
     progreso: respondidas+'/'+activeClues.length,
@@ -581,9 +683,9 @@ async function submitActivity(timeUp=false){
   const box=document.getElementById('score-box');
   box.style.display='block';
   document.getElementById('final-score').textContent=score;
-  const msgs=['¡Excelente trabajo! 🏆','¡Muy bien! 🎉','Buen esfuerzo. 👍','Sigue practicando. 📚','No te rindas, repasa el material. 💪'];
+  const msgs=['Excelente trabajo.','Muy bien.','Buen esfuerzo.','Sigue practicando.','Repasa el material antes de la próxima actividad.'];
   document.getElementById('score-msg').textContent = timeUp
-    ? '⏱ Se agotó el tiempo. Actividad entregada automáticamente.'
+    ? 'Se agotó el tiempo. Actividad entregada automáticamente.'
     : msgs[score>=90?0:score>=75?1:score>=60?2:score>=40?3:4];
   box.scrollIntoView({behavior:'smooth'});
   const submitBtn=document.getElementById('submit-btn');
